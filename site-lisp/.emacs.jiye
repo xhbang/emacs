@@ -1,0 +1,325 @@
+(add-to-list 'load-path "~/.emacs.d/site-lisp/")
+(add-to-list 'load-path "~/.emacs.d/site-lisp/auctex-11.86/")
+(add-to-list 'load-path "~/.emacs.d/site-lisp/auctex-11.86/preview/")
+(add-to-list 'load-path "~/.emacs.d/site-lisp/company-0.5/")
+(add-to-list 'load-path "~/.emacs.d/site-lisp/matlab-emacs/")
+(add-to-list 'load-path "~/.emacs.d/site-lisp/nxhtml/")
+(add-to-list 'Info-default-directory-list "~/.emacs.d/info/")
+
+;; 外观
+(setq inhibit-startup-message t) ;关闭启动画面
+(setq visible-bell t) ;关闭出错时的提示声
+(setq frame-title-format '("" buffer-file-name ""));在标题栏显示buffer名称
+(setq default-fill-column 80) ;默认显示 80列就换行
+(show-paren-mode t) ;括号匹配时显示另外一边的括号，而不跳到另一个括号
+(setq mouse-yank-at-point t) ;支持中键粘贴
+(setq x-select-enable-clipboard t) ;支持emacs和外部程序的粘贴
+(column-number-mode t)
+(linum-mode t)
+(tool-bar-mode -1)
+(setq tool-bar-button-margin 0)
+(fset 'yes-or-no-p 'y-or-n-p);以 y/n代表 yes/no
+(display-time-mode 1) ;显示时间，格式如下
+(setq display-time-24hr-format t)
+(setq display-time-day-and-date t)
+(setq default-frame-alist  ;设置启动窗口大小
+      '((height . 30) (width . 100) (menu-bar-lines . 20) (tool-bar-lines . 0))) 
+(require 'color-theme) 
+(color-theme-arjen)
+(recentf-mode 1)  ;记录最近编辑文件
+
+;; emacs server
+(require 'edit-server)
+(edit-server-start)
+
+(defun max-window ()
+  (interactive)
+  (x-send-client-message ;; max window in HORZ
+   nil 0 nil "_NET_WM_STATE" 32
+   '(2 "_NET_WM_STATE_MAXIMIZED_HORZ" 0))
+  (x-send-client-message ;; max window in VERT
+   nil 0 nil "_NET_WM_STATE" 32
+   '(2 "_NET_WM_STATE_MAXIMIZED_VERT" 0))
+  )
+;;(max-window) 
+(defun frame-custom ()
+  (interactive)
+  (scroll-bar-mode -1)
+  (set-frame-font "YaHei Consolas Hybrid:pixelsize=16:antialias=subpixel")
+  (set-fontset-font "fontset-default" 'unicode '("YaHei Consolas Hybrid" . "unicode-bmp")))
+(frame-custom)
+(add-to-list 'after-make-frame-functions (lambda (new-frame) ;; for emacsclient
+					   (select-frame new-frame)					   
+					   (max-window) 
+					   (frame-custom)))
+
+;; 标签页
+(require 'tabbar)
+(tabbar-mode 1)
+(define-prefix-command 'lwindow-map)
+(global-set-key (kbd "<M-up>") 'tabbar-backward-group)
+(global-set-key (kbd "<M-down>") 'tabbar-forward-group)
+(global-set-key (kbd "<M-left>") 'tabbar-backward)
+(global-set-key (kbd "<M-right>") 'tabbar-forward)
+
+;; 全局快捷键
+(global-set-key [f2] 'company-mode) 
+(global-set-key [S-f2] 'auto-complete-mode) 
+(global-set-key [f3] 'semantic-ia-fast-jump)
+(global-set-key [S-f3] 'semantic-ia-fast-jump-back)
+;; (global-set-key [f4] 'ecb-activate)   
+;; (global-set-key [S-f4] 'ecb-deactivate)
+(global-set-key [f5] 'do-compile)
+(global-set-key [f7] 'recentf-open-files) 
+;;(global-set-key [f8] 'other-window) ; 窗口间跳转
+;; (global-set-key [f9] 'gud-break)
+;; (global-set-key [S-f9] 'gud-remove)
+(global-set-key [f11] 'fullscreen)
+(global-set-key [C-f11] 'menu-bar-mode)
+(global-set-key [S-f11] 'tabbar-mode)
+(global-set-key [M-f11] 'tool-bar-mode)
+(global-set-key [C-S-f11] 'scroll-bar-mode)
+(global-set-key (kbd "C-=") 'text-scale-increase)
+(global-set-key (kbd "C--") 'text-scale-decrease)
+(global-set-key (kbd "C-0") '(lambda ()
+			       (interactive)
+			       (text-scale-set 0)))
+(global-set-key [f12] 'comment-region)
+(global-set-key [S-f12] 'uncomment-region) 
+(add-hook 'gdb-mode-hook '(lambda ()
+			    (gdb-many-windows t)
+			    (tabbar-mode nil)
+			    (tool-bar-mode t)
+			    (fullscreen)
+			    (menu-bar-mode nil)))
+
+;; 备份
+(setq make-backup-file t)
+(setq version-control t) ;;启用版本控制，即可以备份多次
+(setq kept-old-versions 2) ;;备份最原始的版本两次：第一次编辑前的文档，和第二次编辑前的文档 
+(setq kept-new-versions 10)  ;;备份最新的版本十次，理解同上 
+(setq delete-old-versions t) ;;删掉不属于以上12中版本的版本 
+(setq backup-directory-alist '(("." . "~/.emacs.d/backup"))) ;;设置备份文件的路径
+;; (require 'backup-dir) 
+;; (setq bkup-backup-directory-info 
+;;       '((t "/home/jiye/.emacs.d/backup" ok-create full-path))
+(setq backup-by-copying t) ;;备份设置方法，直接拷贝
+
+;;=====================================================================================
+(defun semantic-ia-fast-jump-back ()
+  (interactive)
+  (if (ring-empty-p (oref semantic-mru-bookmark-ring ring))
+      (error "Semantic Bookmark ring is currently empty"))
+  (let* ((ring (oref semantic-mru-bookmark-ring ring))
+	 (alist (semantic-mrub-ring-to-assoc-list ring))
+	 (first (cdr (car alist))))
+    (if (semantic-equivalent-tag-p (oref first tag)
+				   (semantic-current-tag))
+	(setq first (cdr (car (cdr alist)))))
+    (semantic-mrub-switch-tags first)))
+(defun fullscreen ()
+  (interactive)
+  (menu-bar-mode)
+  (tabbar-mode)
+  (x-send-client-message
+   nil 0 nil "_NET_WM_STATE" 32
+   '(2 "_NET_WM_STATE_FULLSCREEN" 0)))
+(defun do-compile ()
+  (interactive)
+  (save-some-buffers t)
+  (setq compilation-read-command nil)
+  (compile "make -f Makefile")
+  (setq compilation-read-command t))
+
+;;=======================================================================================
+;; CEDET 
+(require 'cedet)
+(require 'semantic-c nil 'noerror) ;;必须的??
+(require 'eldoc)
+(require 'semantic-ia) ; names completion, and displaying of information for tags & classes
+;;(require 'semantic-gcc) ; access to system include files
+(require 'semanticdb)
+(require 'semantic-tag-folding nil 'noerror)
+(global-semantic-tag-folding-mode 1)
+(setq semanticdb-default-save-directory "~/.emacs.d/semantic") 
+(semantic-load-enable-code-helpers)      ; Enable prototype help and smart completion 
+(semantic-load-enable-semantic-debugging-helpers)
+;; (global-srecode-minor-mode 1)            ; Enable template insertion menu
+(global-ede-mode t)                      ; Enable the Project management system
+(add-hook 'c-mode-common-hook (lambda () (imenu-add-to-menubar "TAGS")))
+;; (define-key c-mode-base-map [M-S-f3] 'semantic-analyze-proto-impl-toggle)
+(eval-after-load "cedet" ;; extra include
+  '(dolist (d (list "/usr/local/include/opencv/"
+		    "/usr/include/boost/"
+		    "/usr/local/Trolltech/Qt-4.7.1/include/Qt/"
+		    "/usr/local/Trolltech/Qt-4.7.1/include/QtCore/"
+		    "/usr/local/Trolltech/Qt-4.7.1/include/QtGui/"))
+     (semantic-add-system-include d 'c++-mode)
+     (semantic-add-system-include d 'c-mode)))
+
+;; ECB
+(require 'ecb)
+(require 'ecb-autoloads)
+(setq 
+ ecb-tip-of-the-day nil
+ inhibit-startup-message t
+ ecb-auto-compatibility-check nil
+ ecb-version-check nil)
+(custom-set-variables
+ '(ecb-options-version "2.40")
+ '(ecb-primary-secondary-mouse-buttons (quote mouse-1--C-mouse-1)))
+(custom-set-faces)
+(put 'downcase-region 'disabled nil)
+
+;; yasnippet
+(require 'yasnippet) ;; not yasnippet-bundle
+(yas/initialize)
+(yas/load-directory "~/.emacs.d/site-lisp/snippets/")
+
+;; company
+(autoload 'company-mode "company" nil t)
+(setq company-idle-delay t)
+(setq company-minimum-prefix-length 3)
+(add-hook 'c-mode-common-hook 'company-mode)
+(add-hook 'python-mode-hook 'company-mode)
+;; (add-hook 'lisp-mode-hook 'company-mode)
+;; (add-hook 'emacs-lisp-mode-hook 'company-mode)
+
+;; auto-complete
+(require 'auto-complete-config)
+(ac-config-default)
+
+;; msf-abbrev
+(require 'msf-abbrev)
+(require 'cc-mode)
+(require 'perl-mode)
+(require 'cperl-mode)
+(require 'sh-script)
+(require 'shell)
+(require 'tex-site) ;; I use AUCTeX
+(require 'latex)    ;; needed to define LaTeX-mode-hook under AUCTeX
+(require 'tex)      ;; needed to define TeX-mode-hook under AUCTeX
+(setq-default abbrev-mode t) ;; ensure abbrev mode is always on
+(setq save-abbrevs nil) ;; do not bug me about saving my abbreviations
+;;(setq msf-abbrev-verbose t) ;; optional
+(setq msf-abbrev-root "~/.emacs.d/site-lisp/mode-abbrevs")
+(msf-abbrev-load)
+
+;; doxymacs
+(require 'doxymacs)
+(add-hook 'c-mode-common-hook 'doxymacs-mode)
+(add-hook 'font-lock-mode-hook (lambda()
+				 (if (or (eq major-mode 'c-mode) (eq major-mode 'c++-mode))
+				     (doxymacs-font-lock))))
+
+;;==================================================================================
+;;;; C/C++
+(add-hook 'c-mode-common-hook (lambda ()
+				(c-set-style "k&r")
+				(c-toggle-auto-newline -1)))
+				
+;;  LaTeX
+(load "auctex.el" nil t t)
+(load "preview-latex.el" nil t t)
+(require 'reftex)
+(add-hook 'LaTeX-mode-hook 'turn-on-reftex)   ; with AUCTeX LaTeX mode
+(add-hook 'latex-mode-hook 'turn-on-reftex)   ; with Emacs latex mode
+(add-hook 'LaTeX-mode-hook (lambda ()
+			     (add-to-list 'TeX-command-list 
+					  '("XeLaTeX" "%`xelatex%(mode)%' %t" TeX-run-TeX nil t))
+			     (setq TeX-command-default "XeLaTeX")
+			     ;;(add-to-list 'TeX-output-view-style
+			     ;;	  '("^pdf$" "." "xpdf %o %(outpage)"))
+			     ;;(setq TeX-save-query  nil )
+			     ;;(setq TeX-show-compilation t)
+			     ;; (TeX-PDF-mode-on)
+			     (flyspell-mode)
+			     (turn-on-reftex)
+			     (LaTeX-math-mode)
+			     (turn-on-auto-fill) 
+			     (setq fill-column 80)
+			     (setq TeX-auto-save t) 
+			     (setq TeX-parse-self t)
+			     (setq-default TeX-master nil)
+			     (define-key LaTeX-mode-map (kbd "C-c f") 'LaTeX-fill-buffer)))
+
+
+;; matlab
+;; (require 'matlab-load)
+(load-library "matlab-load")
+;; (matlab-cedet-setup)
+(setq matlab-shell-command-switches '("-nodesktop -nosplash"))
+
+;; nXHTML
+(load "autostart")
+
+;; PHP
+;; (load "php-mode")
+;; (add-to-list 'auto-mode-alist '("\\.php[34]?\\'\\|\\.phtml\\'" . php-mode))
+;; (add-to-list 'auto-mode-alist '("\\.module\\'" . php-mode))
+;; (add-to-list 'auto-mode-alist '("\\.inc\\'" . php-mode))
+
+;; yaml 
+(require 'yaml-mode)
+(add-to-list 'auto-mode-alist '("\\.yml$" . yaml-mode))
+(add-to-list 'auto-mode-alist '("\\.yaml$" . yaml-mode))
+(add-hook 'yaml-mode-hook (lambda ()
+			    (define-key yaml-mode-map "\C-m" 'newline-and-indent)))
+
+;; javascript
+;; (add-to-list 'auto-mode-alist '("\\.js\\'" . javascript-mode))
+(autoload 'javascript-mode "javascript" nil t)
+;;
+(autoload 'js2-mode "js2" nil t)
+;; espresso
+(autoload #'espresso-mode "espresso" "Start espresso-mode" t)
+(add-to-list 'auto-mode-alist '("\\.js$" . espresso-mode))
+(add-to-list 'auto-mode-alist '("\\.json$" . espresso-mode))
+
+;; haskell
+;; (load "haskell-site-file")
+;; (add-hook 'haskell-mode-hook 'turn-on-haskell-doc-mode)
+;; (add-hook 'haskell-mode-hook 'turn-on-haskell-indentation)
+;; (add-hook 'haskell-mode-hook 'font-lock-mode)
+
+;; erlang
+;; (setq load-path (cons  "/usr/lib/erlang/lib/tools-2.6.1/emacs" load-path))
+;; (setq erlang-root-dir "/usr/lib/erlang")
+;; (setq exec-path (cons "/usr/lib/erlang/bin" exec-path))
+;; (require 'erlang-start)
+
+;; CMakeLists.txt 
+;; (require 'cmake-mode)
+;; (add-to-list 'auto-mode-alist '("CMakelists\\.txt\\'" . cmake-mode))
+;; (add-to-list 'auto-mode-alist '("\\.cmake\\'" . cmake-mode))
+
+;; asymptote
+;; (autoload 'asy-mode "asy-mode.el" "Asymptote major mode." t)
+;; (autoload 'lasy-mode "asy-mode.el" "hybrid Asymptote/Latex major mode." t)
+;; (autoload 'asy-insinuate-latex "asy-mode.el" "Asymptote insinuate LaTeX." t)
+;; (add-to-list 'auto-mode-alist '("\\.asy$" . asy-mode))
+
+;; Lua
+;; (setq auto-mode-alist (cons '("\\.lua$" . lua-mode) auto-mode-alist))
+;; (autoload 'lua-mode "lua-mode" "Lua editing mode." t)
+;; (add-hook 'lua-mode-hook 'turn-on-font-lock)
+;; (add-hook 'lua-mode-hook 'hs-minor-mode)
+
+;; R
+;; (require 'ess-site)
+
+;; w3m
+;; (require 'w3m-load)
+
+;; actionscript
+;; (require 'actionscript-mode)
+;; (add-to-list 'auto-mode-alist '("\\.as$" . actionscript-mode))
+
+;; django
+(require 'django-html-mode)
+;; (require 'django-mode)
+;; (setq mumamo-background-colors nil) 
+;; (add-to-list 'auto-mode-alist '("\\.html$" . django-html-mode))
+(add-to-list 'auto-mode-alist '("\\.html$" . django-html-mumamo-mode))
+
+;; END ===========================================================================
